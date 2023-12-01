@@ -2,9 +2,6 @@ package soju
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -203,17 +200,6 @@ func (net *network) equalCasemap(a, b string) bool {
 	return net.casemap(a) == net.casemap(b)
 }
 
-func userIdent(u *database.User) string {
-	// The ident is a string we will send to upstream servers in clear-text.
-	// For privacy reasons, make sure it doesn't expose any meaningful user
-	// metadata. We just use the base64-encoded hashed ID, so that people don't
-	// start relying on the string being an integer or following a pattern.
-	var b [64]byte
-	binary.LittleEndian.PutUint64(b[:], uint64(u.ID))
-	h := sha256.Sum256(b[:])
-	return hex.EncodeToString(h[:16])
-}
-
 func (net *network) runConn(ctx context.Context) error {
 	net.user.srv.metrics.upstreams.Add(1)
 	defer net.user.srv.metrics.upstreams.Add(-1)
@@ -235,7 +221,7 @@ func (net *network) runConn(ctx context.Context) error {
 	}()
 
 	if net.user.srv.Identd != nil {
-		net.user.srv.Identd.Store(uc.RemoteAddr().String(), uc.LocalAddr().String(), userIdent(&net.user.User))
+		net.user.srv.Identd.Store(uc.RemoteAddr().String(), uc.LocalAddr().String(), net.user.User.Username)
 		defer net.user.srv.Identd.Delete(uc.RemoteAddr().String(), uc.LocalAddr().String())
 	}
 
