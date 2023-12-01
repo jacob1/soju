@@ -246,6 +246,8 @@ type Channel struct {
 	ReattachOn    MessageFilter
 	DetachAfter   time.Duration
 	DetachOn      MessageFilter
+
+	SortOrder int
 }
 
 type DeliveryReceipt struct {

@@ -113,6 +113,7 @@ var postgresMigrations = []string{
 		CREATE INDEX "MessageIndex" ON "Message" (target, time);
 		CREATE INDEX "MessageSearchIndex" ON "Message" USING GIN (text_search);
 	`,
+	`ALTER TABLE "Channel" ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
 }
 
 type PostgresDB struct {
@@ -487,7 +488,7 @@ func (db *PostgresDB) ListChannels(ctx context.Context, networkID int64) ([]Chan
 
 	rows, err := db.db.QueryContext(ctx, `
 		SELECT id, name, key, detached, detached_internal_msgid, relay_detached, reattach_on, detach_after,
-			detach_on
+			detach_on, sort_order
 		FROM "Channel"
 		WHERE network = $1`, networkID)
 	if err != nil {
@@ -500,7 +501,7 @@ func (db *PostgresDB) ListChannels(ctx context.Context, networkID int64) ([]Chan
 		var ch Channel
 		var key, detachedInternalMsgID sql.NullString
 		var detachAfter int64
-		if err := rows.Scan(&ch.ID, &ch.Name, &key, &ch.Detached, &detachedInternalMsgID, &ch.RelayDetached, &ch.ReattachOn, &detachAfter, &ch.DetachOn); err != nil {
+		if err := rows.Scan(&ch.ID, &ch.Name, &key, &ch.Detached, &detachedInternalMsgID, &ch.RelayDetached, &ch.ReattachOn, &detachAfter, &ch.DetachOn, &ch.SortOrder); err != nil {
 			return nil, err
 		}
 		ch.Key = key.String
@@ -526,19 +527,20 @@ func (db *PostgresDB) StoreChannel(ctx context.Context, networkID int64, ch *Cha
 	if ch.ID == 0 {
 		err = db.db.QueryRowContext(ctx, `
 			INSERT INTO "Channel" (network, name, key, detached, detached_internal_msgid, relay_detached, reattach_on,
-				detach_after, detach_on)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				detach_after, detach_on, sort_order)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			RETURNING id`,
 			networkID, ch.Name, key, ch.Detached, toNullString(ch.DetachedInternalMsgID),
-			ch.RelayDetached, ch.ReattachOn, detachAfter, ch.DetachOn).Scan(&ch.ID)
+			ch.RelayDetached, ch.ReattachOn, detachAfter, ch.DetachOn, ch.SortOrder).Scan(&ch.ID)
 	} else {
 		_, err = db.db.ExecContext(ctx, `
 			UPDATE "Channel"
 			SET name = $2, key = $3, detached = $4, detached_internal_msgid = $5,
-				relay_detached = $6, reattach_on = $7, detach_after = $8, detach_on = $9
+				relay_detached = $6, reattach_on = $7, detach_after = $8, detach_on = $9,
+				sort_order = $10
 			WHERE id = $1`,
 			ch.ID, ch.Name, key, ch.Detached, toNullString(ch.DetachedInternalMsgID),
-			ch.RelayDetached, ch.ReattachOn, detachAfter, ch.DetachOn)
+			ch.RelayDetached, ch.ReattachOn, detachAfter, ch.DetachOn, ch.SortOrder)
 	}
 	return err
 }

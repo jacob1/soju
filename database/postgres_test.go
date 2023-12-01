@@ -54,6 +54,7 @@ CREATE TABLE "Channel" (
 	reattach_on INTEGER NOT NULL DEFAULT 0,
 	detach_after INTEGER NOT NULL DEFAULT 0,
 	detach_on INTEGER NOT NULL DEFAULT 0,
+	sort_order INTEGER NOT NULL DEFAULT 0,
 	UNIQUE(network, name)
 );
 

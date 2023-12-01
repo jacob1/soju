@@ -457,6 +457,26 @@ func (f boolPtrFlag) Set(s string) error {
 	return nil
 }
 
+type intPtrFlag struct {
+	ptr **int
+}
+
+func (f intPtrFlag) String() string {
+	if f.ptr == nil || *f.ptr == nil {
+		return "<nil>"
+	}
+	return strconv.Itoa(**f.ptr)
+}
+
+func (f intPtrFlag) Set(s string) error {
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return err
+	}
+	*f.ptr = &v
+	return nil
+}
+
 func getNetworkFromArg(ctx *serviceContext, params []string) (*network, []string, error) {
 	name, params := popArg(params)
 	if name == "" {
@@ -1232,8 +1252,10 @@ func handleServiceChannelStatus(ctx *serviceContext, params []string) error {
 		})
 
 		sort.Slice(channels, func(i, j int) bool {
-			return strings.ReplaceAll(channels[i].Name, "#", "") <
-				strings.ReplaceAll(channels[j].Name, "#", "")
+			return channels[i].SortOrder < channels[j].SortOrder ||
+				channels[i].SortOrder == channels[j].SortOrder && (
+					strings.ReplaceAll(channels[i].Name, "#", "") <
+					strings.ReplaceAll(channels[j].Name, "#", ""))
 		})
 
 		for _, ch := range channels {
@@ -1258,6 +1280,10 @@ func handleServiceChannelStatus(ctx *serviceContext, params []string) error {
 
 			if ch.Detached {
 				status += ", detached"
+			}
+
+			if ch.SortOrder != 0 {
+				status += fmt.Sprintf(", sort order %v", ch.SortOrder)
 			}
 
 			s := fmt.Sprintf("%v [%v]", name, status)
@@ -1304,6 +1330,7 @@ type channelFlagSet struct {
 	*flag.FlagSet
 	Detached                                         *bool
 	RelayDetached, ReattachOn, DetachAfter, DetachOn *string
+	SortOrder                                        *int
 }
 
 func newChannelFlagSet() *channelFlagSet {
@@ -1313,6 +1340,7 @@ func newChannelFlagSet() *channelFlagSet {
 	fs.Var(stringPtrFlag{&fs.ReattachOn}, "reattach-on", "")
 	fs.Var(stringPtrFlag{&fs.DetachAfter}, "detach-after", "")
 	fs.Var(stringPtrFlag{&fs.DetachOn}, "detach-on", "")
+	fs.Var(intPtrFlag{&fs.SortOrder}, "sort-order", "")
 	return fs
 }
 
@@ -1344,6 +1372,12 @@ func (fs *channelFlagSet) update(channel *database.Channel) error {
 			return err
 		}
 		channel.DetachOn = filter
+	}
+	if fs.SortOrder != nil {
+		if *fs.SortOrder < 0 || *fs.SortOrder >= 1000 {
+			return fmt.Errorf("Sort order must be between 0 and 999")
+		}
+		channel.SortOrder = *fs.SortOrder
 	}
 	return nil
 }

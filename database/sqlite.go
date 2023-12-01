@@ -242,6 +242,7 @@ var sqliteMigrations = []string{
 			INSERT INTO MessageFTS(rowid, text) VALUES (new.id, new.text);
 		END;
 	`,
+	"ALTER TABLE Channel ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
 }
 
 type SqliteDB struct {
@@ -719,7 +720,8 @@ func (db *SqliteDB) ListChannels(ctx context.Context, networkID int64) ([]Channe
 
 	rows, err := db.db.QueryContext(ctx, `SELECT
 			id, name, key, detached, detached_internal_msgid,
-			relay_detached, reattach_on, detach_after, detach_on
+			relay_detached, reattach_on, detach_after, detach_on,
+			sort_order
 		FROM Channel
 		WHERE network = ?`, networkID)
 	if err != nil {
@@ -732,7 +734,7 @@ func (db *SqliteDB) ListChannels(ctx context.Context, networkID int64) ([]Channe
 		var ch Channel
 		var key, detachedInternalMsgID sql.NullString
 		var detachAfter int64
-		if err := rows.Scan(&ch.ID, &ch.Name, &key, &ch.Detached, &detachedInternalMsgID, &ch.RelayDetached, &ch.ReattachOn, &detachAfter, &ch.DetachOn); err != nil {
+		if err := rows.Scan(&ch.ID, &ch.Name, &key, &ch.Detached, &detachedInternalMsgID, &ch.RelayDetached, &ch.ReattachOn, &detachAfter, &ch.DetachOn, &ch.SortOrder); err != nil {
 			return nil, err
 		}
 		ch.Key = key.String
@@ -761,6 +763,7 @@ func (db *SqliteDB) StoreChannel(ctx context.Context, networkID int64, ch *Chann
 		sql.Named("reattach_on", ch.ReattachOn),
 		sql.Named("detach_after", int64(math.Ceil(ch.DetachAfter.Seconds()))),
 		sql.Named("detach_on", ch.DetachOn),
+		sql.Named("sort_order", ch.SortOrder),
 
 		sql.Named("id", ch.ID), // only for UPDATE
 	}
@@ -770,12 +773,13 @@ func (db *SqliteDB) StoreChannel(ctx context.Context, networkID int64, ch *Chann
 		_, err = db.db.ExecContext(ctx, `UPDATE Channel
 			SET network = :network, name = :name, key = :key, detached = :detached,
 				detached_internal_msgid = :detached_internal_msgid, relay_detached = :relay_detached,
-				reattach_on = :reattach_on, detach_after = :detach_after, detach_on = :detach_on
+				reattach_on = :reattach_on, detach_after = :detach_after, detach_on = :detach_on,
+				sort_order = :sort_order
 			WHERE id = :id`, args...)
 	} else {
 		var res sql.Result
-		res, err = db.db.ExecContext(ctx, `INSERT INTO Channel(network, name, key, detached, detached_internal_msgid, relay_detached, reattach_on, detach_after, detach_on)
-			VALUES (:network, :name, :key, :detached, :detached_internal_msgid, :relay_detached, :reattach_on, :detach_after, :detach_on)`, args...)
+		res, err = db.db.ExecContext(ctx, `INSERT INTO Channel(network, name, key, detached, detached_internal_msgid, relay_detached, reattach_on, detach_after, detach_on, sort_order)
+			VALUES (:network, :name, :key, :detached, :detached_internal_msgid, :relay_detached, :reattach_on, :detach_after, :detach_on, :sort_order)`, args...)
 		if err != nil {
 			return err
 		}

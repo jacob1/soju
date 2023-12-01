@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1548,13 +1549,28 @@ func (dc *downstreamConn) welcome(ctx context.Context, user *user) error {
 	}
 
 	dc.forEachUpstream(func(uc *upstreamConn) {
+		// Sort channels according to user-defined sort order
+		var sortOrders map[*upstreamChannel]int = make(map[*upstreamChannel]int)
+		var channels []*upstreamChannel
 		uc.channels.ForEach(func(_ string, ch *upstreamChannel) {
+			dbChan := uc.network.channels.Get(ch.Name)
+			if dbChan != nil {
+				sortOrders[ch] = dbChan.SortOrder
+			}
+			channels = append(channels, ch)
+		})
+
+		sort.Slice(channels, func(i, j int) bool {
+			return sortOrders[channels[i]] < sortOrders[channels[j]]
+		})
+
+		for _, ch := range channels {
 			if !ch.complete {
-				return
+				continue
 			}
 			record := uc.network.channels.Get(ch.Name)
 			if record != nil && record.Detached {
-				return
+				continue
 			}
 
 			dc.SendMessage(ctx, &irc.Message{
@@ -1564,7 +1580,7 @@ func (dc *downstreamConn) welcome(ctx context.Context, user *user) error {
 			})
 
 			forwardChannel(ctx, dc, ch)
-		})
+		}
 	})
 
 	dc.forEachNetwork(func(net *network) {
