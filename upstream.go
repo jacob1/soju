@@ -2211,7 +2211,8 @@ func (uc *upstreamConn) updateAway() {
 		return
 	}
 	if away {
-		reason := "Auto away"
+		t := time.Now()
+		reason := "Auto away at " + t.Format("Mon Jan 2 15:04:05 2006 MST")
 		if uc.caps.IsAvailable("draft/pre-away") {
 			reason = "*"
 		}
