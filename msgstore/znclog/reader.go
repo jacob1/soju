@@ -26,11 +26,17 @@ func UnmarshalLine(line string, user *database.User, network *database.Network, 
 	var cmd string
 	var prefix *irc.Prefix
 	var params []string
-	if events && strings.HasPrefix(line, "*** ") {
+	if !events && strings.HasPrefix(line, "*** ") {
+		// Display everything as plain PRIVMSG if real events aren't supported, similar to znc's buffextras module
+		prefix = &irc.Prefix{Name: "*soju"}
+		cmd = "PRIVMSG"
+		params = []string{entity, line[4:]}
+	} else if events && strings.HasPrefix(line, "*** ") {
 		parts := strings.SplitN(line[4:], " ", 2)
 		if len(parts) != 2 {
 			return nil, time.Time{}, nil
 		}
+
 		switch parts[0] {
 		case "Joins:", "Parts:", "Quits:":
 			args := strings.SplitN(parts[1], " ", 3)
