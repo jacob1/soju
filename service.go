@@ -927,6 +927,7 @@ func handleUserStatus(ctx *serviceContext, params []string) error {
 	// Limit to a small amount of users to avoid sending
 	// thousands of messages on large instances.
 	users := make([]database.User, 0, 50)
+	numConnections := make([]int64, 0, 50)
 
 	ctx.srv.lock.Lock()
 	n := len(ctx.srv.users)
@@ -935,10 +936,11 @@ func handleUserStatus(ctx *serviceContext, params []string) error {
 			break
 		}
 		users = append(users, user.User)
+		numConnections = append(numConnections, user.numDownstreamConns.Load())
 	}
 	ctx.srv.lock.Unlock()
 
-	for _, user := range users {
+	for i, user := range users {
 		var attrs []string
 		if user.Admin {
 			attrs = append(attrs, "admin")
@@ -956,6 +958,16 @@ func handleUserStatus(ctx *serviceContext, params []string) error {
 			return fmt.Errorf("could not get networks of user %q: %v", user.Username, err)
 		}
 		line += fmt.Sprintf(": %d networks", len(networks))
+		if conns := numConnections[i]; conns > 0 {
+			s := "s"
+			if conns == 1 {
+				s = ""
+			}
+			line += fmt.Sprintf(", %d downstream connection%s", conns, s)
+		}
+		if user.DownstreamInteractedAt.Unix() > 0 {
+			line += fmt.Sprintf(", last seen %s", user.DownstreamInteractedAt.Format(time.UnixDate))
+		}
 		ctx.print(line)
 	}
 	if n > len(users) {
